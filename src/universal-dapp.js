@@ -27,8 +27,8 @@ function UniversalDApp (contracts, options) {
 
     self.vm = new EthJSVM(null, null, { activatePrecompiles: true, enableHomestead: true });
 
-    self.addAccount('3cd7232cd6f3fc66a57a6bedc1a8ed6c228fff0a327e169c2bcc5e869ed49511');
-    self.addAccount('2ac6c190b09897cd8987869cc7b918cfea07ee82038d492abce033c75c1b1d0c');
+    self._addAccount('3cd7232cd6f3fc66a57a6bedc1a8ed6c228fff0a327e169c2bcc5e869ed49511');
+    self._addAccount('2ac6c190b09897cd8987869cc7b918cfea07ee82038d492abce033c75c1b1d0c');
   } else if (options.mode !== 'web3') {
     throw new Error('Either VM or Web3 mode must be selected');
   }
@@ -42,8 +42,12 @@ UniversalDApp.prototype.newAccount = function () {
   this._addAccount(privateKey);
 };
 
-UniversalDApp.prototype.addAccount = function (privateKey, balance) {
+UniversalDApp.prototype._addAccount = function (privateKey, balance) {
   var self = this;
+
+  if (!self.vm) {
+    throw new Error('_addAccount() cannot be called in non-VM mode');
+  }
 
   if (self.accounts) {
     privateKey = new Buffer(privateKey, 'hex');
