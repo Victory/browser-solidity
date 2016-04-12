@@ -34,12 +34,16 @@ function UniversalDApp (contracts, options) {
   }
 }
 
-UniversalDApp.prototype.newAccount = function () {
-  var privateKey;
-  do {
-    privateKey = crypto.randomBytes(32);
-  } while (!ethJSUtil.isValidPrivate(privateKey));
-  this._addAccount(privateKey);
+UniversalDApp.prototype.newAccount = function (password) {
+  if (!this.vm) {
+    this.web3.personal.newAccount(password);
+  } else {
+    var privateKey;
+    do {
+      privateKey = crypto.randomBytes(32);
+    } while (!ethJSUtil.isValidPrivate(privateKey));
+    this._addAccount(privateKey);
+  }
 };
 
 UniversalDApp.prototype._addAccount = function (privateKey, balance) {
@@ -64,7 +68,7 @@ UniversalDApp.prototype.getAccounts = function (cb) {
   var self = this;
 
   if (!self.vm) {
-    self.web3.eth.getAccounts(cb);
+    self.web3.personal.getAccounts(cb);
   } else {
     if (!self.accounts) {
       return cb('No accounts?');
