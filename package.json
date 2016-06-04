@@ -19,7 +19,7 @@
     "jquery": "^2.2.0",
     "js-base64": "^2.1.9",
     "semistandard": "^7.0.0",
-    "web3": "^0.15.3",
+    "web3": "^0.16.0",
     "webworkify": "^1.2.1"
   },
   "repository": {
