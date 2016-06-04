@@ -1,3 +1,5 @@
+var solc = require('solc/wrapper');
+
 var webworkify = require('webworkify');
 var queryParams = require('./query-params');
 var utils = require('./utils');
@@ -71,48 +73,33 @@ function Compiler (editor, handleGithubCall, outputField, hidingRHP, updateFiles
 
   function onInternalCompilerLoaded (setVersionText) {
     if (worker === null) {
-      var compile;
-      var missingInputs = [];
-      var Module = window.Module;
-      if ('_compileJSONCallback' in Module) {
-        compilerAcceptsMultipleFiles = true;
-        var missingInputsCallback = Module.Runtime.addFunction(function (path, contents, error) {
-          missingInputs.push(Module.Pointer_stringify(path));
-        });
-        var compileInternal = Module.cwrap('compileJSONCallback', 'string', [ 'string', 'number', 'number' ]);
-        compile = function (input, optimize) {
-          missingInputs.length = 0;
-          return compileInternal(input, optimize, missingInputsCallback);
-        };
-      } else if ('_compileJSONMulti' in Module) {
-        compilerAcceptsMultipleFiles = true;
-        compile = Module.cwrap('compileJSONMulti', 'string', [ 'string', 'number' ]);
-      } else {
-        compilerAcceptsMultipleFiles = false;
-        compile = Module.cwrap('compileJSON', 'string', [ 'string', 'number' ]);
-      }
+      var compiler = solc(window.Module);
+
+      compilerAcceptsMultipleFiles = compiler.supportsMulti;
+
       compileJSON = function (source, optimize, cb) {
+        var missingInputs = [];
+        var missingInputsCallback = function (path) {
+          missingInputs.push(path);
+          return { error: 'Deferred import' };
+        };
+
+        var result;
         try {
-          var result = compile(source, optimize);
+          result = compiler.compile(source, optimize, missingInputsCallback);
         } catch (exception) {
-          result = JSON.stringify({ error: 'Uncaught JavaScript exception:\n' + exception });
+          result = { error: 'Uncaught JavaScript exception:\n' + exception };
         }
+
         compilationFinished(result, missingInputs);
       };
-      onCompilerLoaded(setVersionText, Module.cwrap('version', 'string', [])());
+
+      onCompilerLoaded(setVersionText, compiler.version());
     }
   }
 
-  function compilationFinished (result, missingInputs) {
-    var data;
+  function compilationFinished (data, missingInputs) {
     var noFatalErrors = true; // ie warnings are ok
-
-    try {
-      data = JSON.parse(result);
-    } catch (exception) {
-      renderer.error('Invalid JSON output from the compiler: ' + exception);
-      return;
-    }
 
     if (data['error'] !== undefined) {
       renderer.error(data['error']);
@@ -138,6 +125,7 @@ function Compiler (editor, handleGithubCall, outputField, hidingRHP, updateFiles
 
   this.loadVersion = function (usingWorker, version, setVersionText) {
     var url = 'https://ethereum.github.io/solc-bin/bin/' + version;
+    console.log('Loading ' + url + ' ' + (usingWorker ? 'with worker' : 'without worker'));
 
     if (usingWorker) {
       loadWorker(url, setVersionText);
@@ -177,14 +165,20 @@ function Compiler (editor, handleGithubCall, outputField, hidingRHP, updateFiles
           onCompilerLoaded(setVersionText, data.data);
           break;
         case 'compiled':
-          compilationFinished(data.data, data.missingInputs);
+          var result;
+          try {
+            result = JSON.parse(data.data);
+          } catch (exception) {
+            result = { 'error': 'Invalid JSON output from the compiler: ' + exception };
+          }
+          compilationFinished(result, data.missingInputs);
           break;
       }
     });
     worker.onerror = function (msg) { console.log(msg.data); };
     worker.addEventListener('error', function (msg) { console.log(msg.data); });
     compileJSON = function (source, optimize) {
-      worker.postMessage({cmd: 'compile', source: source, optimize: optimize});
+      worker.postMessage({cmd: 'compile', source: JSON.stringify(source), optimize: optimize});
     };
     worker.postMessage({cmd: 'loadVersion', data: url});
   }
@@ -240,7 +234,7 @@ function Compiler (editor, handleGithubCall, outputField, hidingRHP, updateFiles
         }
       }
     } while (reloop);
-    cb(JSON.stringify({ 'sources': files }));
+    cb({ 'sources': files });
   }
 }
 
